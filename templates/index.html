@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>star-jar</title>
+</head>
+<body>
+  <h1>Today's tasks</h1>
+<p>My jar: ⭐ {{.Total}}</p>
+<ul>
+  {{range .Tasks}}
+    <li>
+      {{.Icon}} {{.Title}} — {{.Stars}} ⭐
+      {{if .Done}}✅{{else}}
+        <form method="post" action="/tasks/{{.ID}}/done" style="display:inline">
+          <button>I did it!</button>
+        </form>
+      {{end}}
+    </li>
+  {{else}}
+    <li>No tasks today 🎉</li>
+  {{end}}
+</ul>
+</body>
+</html>
