@@ -1,12 +1,14 @@
 package main
 
 import (
+	"database/sql"
 	"embed"
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
 	"strconv"
-	"sync"
+	"time"
 )
 
 type Task struct {
@@ -16,17 +18,6 @@ type Task struct {
 	Stars int
 	Done  bool
 }
-
-// in-memory for now; SQLite comes in v1
-var (
-	mu    sync.Mutex
-	tasks = []Task{
-		{ID: 1, Title: "Brush teeth", Icon: "🪥", Stars: 1},
-		{ID: 2, Title: "Put shoes away", Icon: "👟", Stars: 1},
-		{ID: 3, Title: "Tidy toys", Icon: "🧸", Stars: 3},
-		{ID: 4, Title: "Help set up table", Icon: "🍽️", Stars: 3},
-	}
-)
 
 //go:embed templates
 var templateFS embed.FS
@@ -38,25 +29,31 @@ type pageData struct {
 	Total int
 }
 
-func totalStars() int {
-	total := 0
-	for _, t := range tasks {
-		if t.Done {
-			total += t.Stars
-		}
-	}
-	return total
+func today() string {
+	return time.Now().Format("2006-01-02")
 }
 
 func main() {
+	db, err := openDB("star-jar.db")
+	if err != nil {
+		log.Fatal("open db: ", err)
+	}
+	defer db.Close()
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		data := pageData{Tasks: tasks, Total: totalStars()}
-		err := tmpl.Execute(w, data)
-		mu.Unlock()
+		tasks, err := todayTasks(db, today())
 		if err != nil {
+			serverError(w, err)
+			return
+		}
+		total, err := starBalance(db)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		if err := tmpl.Execute(w, pageData{Tasks: tasks, Total: total}); err != nil {
 			log.Println("render:", err)
 		}
 	})
@@ -68,19 +65,13 @@ func main() {
 			return
 		}
 
-		mu.Lock()
-		found := false
-		for i := range tasks {
-			if tasks[i].ID == id {
-				tasks[i].Done = true
-				found = true
-				break
-			}
-		}
-		mu.Unlock()
-
-		if !found {
+		err = completeTask(db, id, today())
+		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			serverError(w, err)
 			return
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -88,4 +79,9 @@ func main() {
 
 	log.Println("listening on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
+}
+
+func serverError(w http.ResponseWriter, err error) {
+	log.Println("error:", err)
+	http.Error(w, "something went wrong", http.StatusInternalServerError)
 }
