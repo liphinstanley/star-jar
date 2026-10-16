@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -46,13 +47,32 @@ type Request struct {
 //go:embed templates
 var templateFS embed.FS
 
-var tmpl = template.Must(template.ParseFS(templateFS, "templates/*.html"))
+//go:embed static
+var staticFS embed.FS
+
+var funcs = template.FuncMap{
+	"stars": func(n int) string { return strings.Repeat("⭐", n) },
+}
+
+var tmpl = template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))
 
 type kidPage struct {
 	Tasks       []Task
 	Rewards     []Reward
 	Redemptions []Redemption
 	Total       int
+}
+
+// JarPercent is how full the jar looks: stars saved toward the biggest reward
+func (p kidPage) JarPercent() int {
+	goal := 0
+	for _, rw := range p.Rewards {
+		goal = max(goal, rw.Cost)
+	}
+	if goal == 0 {
+		return 0
+	}
+	return min(p.Total*100/goal, 100)
 }
 
 type parentPage struct {
@@ -73,6 +93,7 @@ func main() {
 	defer db.Close()
 
 	mux := http.NewServeMux()
+	mux.Handle("GET /static/", http.FileServerFS(staticFS))
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		var page kidPage

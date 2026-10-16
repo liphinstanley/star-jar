@@ -1,59 +1,69 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>star-jar</title>
-</head>
-<body>
-  <h1>Today's tasks</h1>
-<p>My jar: ⭐ {{.Total}}</p>
-<ul>
-  {{range .Tasks}}
-      <li>
-        {{.Icon}} {{.Title}} — {{.Stars}} ⭐
-        {{if eq .Status "approved"}}✅
-        {{else if eq .Status "pending"}}⏳ waiting for papa
-        {{else}}
-          <form method="post" action="/tasks/{{.ID}}/done" style="display:inline">
-            <button>I did it!</button>
-          </form>
-          {{if eq .Status "rejected"}}🔁 try again{{end}}
-        {{end}}
-      </li>
-  {{else}}
-    <li>No tasks today 🎉</li>
-  {{end}}
-</ul>
-<h2>Rewards</h2>
-<ul>
-  {{range .Rewards}}
-    <li>
-      {{.Icon}} {{.Title}} — {{.Cost}} ⭐ {{if eq .Size "big"}}(big){{end}}
+{{template "head" "star-jar"}}
+<body class="kid">
+  <header class="jar-wrap">
+    <div class="jar" role="img" aria-label="{{.Total}} stars in the jar">
+      <div class="jar-fill" style="height: {{.JarPercent}}%"></div>
+      <div class="jar-count">⭐ {{.Total}}</div>
+    </div>
+  </header>
+
+  <h2>☀️ Today</h2>
+  <section class="tiles">
+    {{range .Tasks}}
+      {{if eq .Status "approved"}}
+        <div class="tile done">
+          <span class="icon">{{.Icon}}</span>
+          <span class="stars">✅</span>
+          <span class="label">{{.Title}}</span>
+        </div>
+      {{else if eq .Status "pending"}}
+        <div class="tile pending">
+          <span class="icon">{{.Icon}}</span>
+          <span class="stars">⏳</span>
+          <span class="label">{{.Title}}</span>
+        </div>
+      {{else}}
+        <form method="post" action="/tasks/{{.ID}}/done">
+          <button class="tile todo{{if eq .Status "rejected"}} retry{{end}}">
+            <span class="icon">{{.Icon}}</span>
+            <span class="stars">{{stars .Stars}}</span>
+            <span class="label">{{.Title}}</span>
+          </button>
+        </form>
+      {{end}}
+    {{end}}
+  </section>
+
+  <h2>🎁 Rewards</h2>
+  <section class="tiles">
+    {{range .Rewards}}
       {{if ge $.Total .Cost}}
-        <form method="post" action="/rewards/{{.ID}}/spend" style="display:inline">
-          <button>{{if eq .Size "big"}}Ask papa{{else}}Get it!{{end}}</button>
+        <form method="post" action="/rewards/{{.ID}}/spend">
+          <button class="tile reward {{.Size}}">
+            <span class="icon">{{.Icon}}</span>
+            <span class="stars">⭐ {{.Cost}}</span>
+            <span class="label">{{.Title}}</span>
+          </button>
         </form>
       {{else}}
-        <progress value="{{$.Total}}" max="{{.Cost}}"></progress> {{$.Total}} / {{.Cost}}
+        <div class="tile reward locked {{.Size}}">
+          <span class="icon">{{.Icon}}</span>
+          <progress value="{{$.Total}}" max="{{.Cost}}"></progress>
+          <span class="label">{{$.Total}} / {{.Cost}} ⭐</span>
+        </div>
       {{end}}
-    </li>
+    {{end}}
+  </section>
+
+  {{if .Redemptions}}
+    <h2>🎉 Coming soon</h2>
+    <section class="strip">
+      {{range .Redemptions}}
+        <span class="chip">{{.Icon}} {{if eq .Status "pending"}}⏳{{else}}🎁{{end}}</span>
+      {{end}}
+    </section>
   {{end}}
-</ul>
 
-{{if .Redemptions}}
-<h2>My rewards</h2>
-<ul>
-  {{range .Redemptions}}
-    <li>
-      {{.Icon}} {{.Title}} —
-      {{if eq .Status "pending"}}⏳ asking papa{{else}}🎁 coming soon{{end}}
-    </li>
-  {{end}}
-</ul>
-{{end}}
-
-<p><a href="/parent">parent</a></p>
-
+  <a class="parent-link" href="/parent" aria-label="parent page">🔒</a>
 </body>
 </html>
