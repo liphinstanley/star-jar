@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	_ "embed"
+	"errors"
 
 	_ "modernc.org/sqlite"
 )
@@ -11,7 +12,7 @@ import (
 var schema string
 
 func openDB(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}
@@ -26,20 +27,34 @@ func openDB(path string) (*sql.DB, error) {
 	return db, nil
 }
 
-// seed adds starter tasks on first run only
+var errNotEnoughStars = errors.New("not enough stars yet")
+
+// seed adds starter tasks and rewards on first run only
 func seed(db *sql.DB) error {
+	if err := seedTable(db, "tasks", `INSERT INTO tasks (title, icon, stars) VALUES
+		('Brush teeth', '🪥', 1),
+		('Put shoes away', '👟', 1),
+		('Tidy toys', '🧸', 3),
+		('Help set up table', '🍽️', 3)`); err != nil {
+		return err
+	}
+	return seedTable(db, "rewards", `INSERT INTO rewards (title, icon, cost, size) VALUES
+		('Walk with papa', '🚶', 5, 'small'),
+		('Extra bedtime story', '📖', 5, 'small'),
+		('Play area', '🛝', 10, 'small'),
+		('New bike', '🚲', 50, 'big')`)
+}
+
+// seedTable runs insert only if table is empty
+func seedTable(db *sql.DB, table, insert string) error {
 	var n int
-	if err := db.QueryRow("SELECT COUNT(*) FROM tasks").Scan(&n); err != nil {
+	if err := db.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&n); err != nil {
 		return err
 	}
 	if n > 0 {
 		return nil
 	}
-	_, err := db.Exec(`INSERT INTO tasks (title, icon, stars) VALUES
-		('Brush teeth', '🪥', 1),
-		('Put shoes away', '👟', 1),
-		('Tidy toys', '🧸', 3),
-		('Help set up table', '🍽️', 3)`)
+	_, err := db.Exec(insert)
 	return err
 }
 
@@ -154,4 +169,132 @@ func rejectRequest(db *sql.DB, logID int) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func listRewards(db *sql.DB) ([]Reward, error) {
+	rows, err := db.Query("SELECT id, title, icon, cost, size FROM rewards ORDER BY cost, id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rewards []Reward
+	for rows.Next() {
+		var rw Reward
+		if err := rows.Scan(&rw.ID, &rw.Title, &rw.Icon, &rw.Cost, &rw.Size); err != nil {
+			return nil, err
+		}
+		rewards = append(rewards, rw)
+	}
+	return rewards, rows.Err()
+}
+
+// openRedemptions lists rewards bought but not given yet
+func openRedemptions(db *sql.DB) ([]Redemption, error) {
+	rows, err := db.Query(`
+		SELECT d.id, r.title, r.icon, r.cost, d.status
+		FROM redemptions d
+		JOIN rewards r ON r.id = d.reward_id
+		WHERE d.status IN ('pending', 'approved')
+		ORDER BY d.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reds []Redemption
+	for rows.Next() {
+		var d Redemption
+		if err := rows.Scan(&d.ID, &d.Title, &d.Icon, &d.Cost, &d.Status); err != nil {
+			return nil, err
+		}
+		reds = append(reds, d)
+	}
+	return reds, rows.Err()
+}
+
+// spendReward takes the stars out of the jar and records the purchase.
+// Small rewards are approved straight away, big ones wait for a parent.
+func spendReward(db *sql.DB, rewardID int) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var title, size string
+	var cost int
+	err = tx.QueryRow("SELECT title, cost, size FROM rewards WHERE id = ?", rewardID).Scan(&title, &cost, &size)
+	if err != nil {
+		return err
+	}
+
+	var balance int
+	if err := tx.QueryRow("SELECT COALESCE(SUM(delta), 0) FROM ledger").Scan(&balance); err != nil {
+		return err
+	}
+	if balance < cost {
+		return errNotEnoughStars
+	}
+
+	status := "approved"
+	if size == "big" {
+		status = "pending"
+	}
+	if _, err := tx.Exec("INSERT INTO ledger (delta, reason) VALUES (?, ?)", -cost, "reward: "+title); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("INSERT INTO redemptions (reward_id, status) VALUES (?, ?)", rewardID, status); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// approveRedemption says yes to a big reward; the stars are already spent
+func approveRedemption(db *sql.DB, id int) error {
+	return setRedemptionStatus(db, id, "pending", "approved")
+}
+
+// givenRedemption marks a reward as actually given
+func givenRedemption(db *sql.DB, id int) error {
+	return setRedemptionStatus(db, id, "approved", "given")
+}
+
+func setRedemptionStatus(db *sql.DB, id int, from, to string) error {
+	res, err := db.Exec("UPDATE redemptions SET status = ? WHERE id = ? AND status = ?", to, id, from)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// rejectRedemption says no to a big reward and puts the stars back in the jar
+func rejectRedemption(db *sql.DB, id int) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var title string
+	var cost int
+	err = tx.QueryRow(`
+		SELECT r.title, r.cost
+		FROM redemptions d
+		JOIN rewards r ON r.id = d.reward_id
+		WHERE d.id = ? AND d.status = 'pending'`, id).Scan(&title, &cost)
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec("UPDATE redemptions SET status = 'rejected' WHERE id = ?", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("INSERT INTO ledger (delta, reason) VALUES (?, ?)", cost, "refund: "+title); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

@@ -21,3 +21,20 @@ CREATE TABLE IF NOT EXISTS ledger (
     reason TEXT    NOT NULL,
     at     TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS rewards (
+    id    INTEGER PRIMARY KEY,
+    title TEXT    NOT NULL,
+    icon  TEXT    NOT NULL,
+    cost  INTEGER NOT NULL CHECK (cost > 0),
+    size  TEXT    NOT NULL CHECK (size IN ('small', 'big'))
+);
+
+-- one row per reward bought; stars leave the jar when the row is created
+CREATE TABLE IF NOT EXISTS redemptions (
+    id        INTEGER PRIMARY KEY,
+    reward_id INTEGER NOT NULL REFERENCES rewards(id),
+    status    TEXT    NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'given')),
+    at        TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+

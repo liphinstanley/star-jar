@@ -23,6 +23,30 @@
       <li>Nothing to approve 👍</li>
     {{end}}
   </ul>
+    <h1>Rewards</h1>
+  <ul>
+    {{range .Redemptions}}
+      <li>
+        {{.Icon}} {{.Title}} — {{.Cost}} ⭐
+        {{if eq .Status "pending"}}
+          <form method="post" action="/parent/redemptions/{{.ID}}/approve" style="display:inline">
+            <button>Yes</button>
+          </form>
+          <form method="post" action="/parent/redemptions/{{.ID}}/reject" style="display:inline">
+            <button>Not now (refund)</button>
+          </form>
+        {{else}}
+          <form method="post" action="/parent/redemptions/{{.ID}}/given" style="display:inline">
+            <button>Given ✔</button>
+          </form>
+        {{end}}
+      </li>
+    {{else}}
+      <li>No rewards to give 👍</li>
+    {{end}}
+  </ul>
+
   <p><a href="/">back to tasks</a></p>
+
 </body>
 </html>

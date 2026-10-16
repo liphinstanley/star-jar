@@ -19,6 +19,22 @@ type Task struct {
 	Status string // "", "pending", "approved" or "rejected"
 }
 
+type Reward struct {
+	ID    int
+	Title string
+	Icon  string
+	Cost  int
+	Size  string // "small" or "big"
+}
+
+type Redemption struct {
+	ID     int
+	Title  string
+	Icon   string
+	Cost   int
+	Status string // "pending", "approved", "rejected" or "given"
+}
+
 type Request struct {
 	ID    int
 	Day   string
@@ -33,13 +49,16 @@ var templateFS embed.FS
 var tmpl = template.Must(template.ParseFS(templateFS, "templates/*.html"))
 
 type kidPage struct {
-	Tasks []Task
-	Total int
+	Tasks       []Task
+	Rewards     []Reward
+	Redemptions []Redemption
+	Total       int
 }
 
 type parentPage struct {
-	Requests []Request
-	Total    int
+	Requests    []Request
+	Redemptions []Redemption
+	Total       int
 }
 
 func today() string {
@@ -56,17 +75,26 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		tasks, err := todayTasks(db, today())
-		if err != nil {
+		var page kidPage
+		var err error
+		if page.Tasks, err = todayTasks(db, today()); err != nil {
 			serverError(w, err)
 			return
 		}
-		total, err := starBalance(db)
-		if err != nil {
+		if page.Rewards, err = listRewards(db); err != nil {
 			serverError(w, err)
 			return
 		}
-		render(w, "index.html", kidPage{Tasks: tasks, Total: total})
+		if page.Redemptions, err = openRedemptions(db); err != nil {
+			serverError(w, err)
+			return
+		}
+		if page.Total, err = starBalance(db); err != nil {
+			serverError(w, err)
+			return
+		}
+		render(w, "index.html", page)
+
 	})
 
 	mux.HandleFunc("POST /tasks/{id}/done", func(w http.ResponseWriter, r *http.Request) {
@@ -82,17 +110,22 @@ func main() {
 	})
 
 	mux.HandleFunc("GET /parent", func(w http.ResponseWriter, r *http.Request) {
-		reqs, err := pendingRequests(db)
-		if err != nil {
+		var page parentPage
+		var err error
+		if page.Requests, err = pendingRequests(db); err != nil {
 			serverError(w, err)
 			return
 		}
-		total, err := starBalance(db)
-		if err != nil {
+		if page.Redemptions, err = openRedemptions(db); err != nil {
 			serverError(w, err)
 			return
 		}
-		render(w, "parent.html", parentPage{Requests: reqs, Total: total})
+		if page.Total, err = starBalance(db); err != nil {
+			serverError(w, err)
+			return
+		}
+		render(w, "parent.html", page)
+
 	})
 
 	mux.HandleFunc("POST /parent/requests/{id}/approve", func(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +152,40 @@ func main() {
 		http.Redirect(w, r, "/parent", http.StatusSeeOther)
 	})
 
+	mux.HandleFunc("POST /rewards/{id}/spend", func(w http.ResponseWriter, r *http.Request) {
+		id, err := pathID(r)
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		if !handled(w, r, spendReward(db, id)) {
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+
+	redemptionActions := map[string]func(*sql.DB, int) error{
+		"approve": approveRedemption,
+		"reject":  rejectRedemption,
+		"given":   givenRedemption,
+	}
+	mux.HandleFunc("POST /parent/redemptions/{id}/{action}", func(w http.ResponseWriter, r *http.Request) {
+		action, ok := redemptionActions[r.PathValue("action")]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		id, err := pathID(r)
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		if !handled(w, r, action(db, id)) {
+			return
+		}
+		http.Redirect(w, r, "/parent", http.StatusSeeOther)
+	})
+
 	log.Println("listening on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }
@@ -134,6 +201,8 @@ func handled(w http.ResponseWriter, r *http.Request, err error) bool {
 		return true
 	case errors.Is(err, sql.ErrNoRows):
 		http.NotFound(w, r)
+	case errors.Is(err, errNotEnoughStars):
+		http.Error(w, err.Error(), http.StatusConflict)
 	default:
 		serverError(w, err)
 	}

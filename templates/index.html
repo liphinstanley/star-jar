@@ -25,6 +25,35 @@
     <li>No tasks today 🎉</li>
   {{end}}
 </ul>
+<h2>Rewards</h2>
+<ul>
+  {{range .Rewards}}
+    <li>
+      {{.Icon}} {{.Title}} — {{.Cost}} ⭐ {{if eq .Size "big"}}(big){{end}}
+      {{if ge $.Total .Cost}}
+        <form method="post" action="/rewards/{{.ID}}/spend" style="display:inline">
+          <button>{{if eq .Size "big"}}Ask papa{{else}}Get it!{{end}}</button>
+        </form>
+      {{else}}
+        <progress value="{{$.Total}}" max="{{.Cost}}"></progress> {{$.Total}} / {{.Cost}}
+      {{end}}
+    </li>
+  {{end}}
+</ul>
+
+{{if .Redemptions}}
+<h2>My rewards</h2>
+<ul>
+  {{range .Redemptions}}
+    <li>
+      {{.Icon}} {{.Title}} —
+      {{if eq .Status "pending"}}⏳ asking papa{{else}}🎁 coming soon{{end}}
+    </li>
+  {{end}}
+</ul>
+{{end}}
+
 <p><a href="/parent">parent</a></p>
+
 </body>
 </html>
