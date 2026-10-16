@@ -1,8 +1,10 @@
 {{template "head" "star-jar"}}
-<body class="kid">
+<body class="kid" hx-boost="true">
+<main id="app" data-total="{{.Total}}"
+      hx-get="/" hx-trigger="every 5s" hx-select="#app" hx-swap="outerHTML">
   <header class="jar-wrap">
     <div class="jar" role="img" aria-label="{{.Total}} stars in the jar">
-      <div class="jar-fill" style="height: {{.JarPercent}}%"></div>
+      <div id="jar-fill" class="jar-fill" style="height: {{.JarPercent}}%"></div>
       <div class="jar-count">⭐ {{.Total}}</div>
     </div>
   </header>
@@ -63,7 +65,7 @@
       {{end}}
     </section>
   {{end}}
-
+</main>
   <a class="parent-link" href="/parent" aria-label="parent page">🔒</a>
 </body>
 </html>
