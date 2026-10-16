@@ -95,6 +95,12 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.FileServerFS(staticFS))
 
+	// the service worker must be served from / to control the whole site
+	mux.HandleFunc("GET /sw.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFileFS(w, r, staticFS, "static/sw.js")
+	})
+
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		var page kidPage
 		var err error

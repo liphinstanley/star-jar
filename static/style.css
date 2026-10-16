@@ -131,3 +131,16 @@ body.parent button { padding: 6px 12px; font: inherit; }
   to   { transform: translateY(170px) scale(0.6); opacity: 0; }
 }
 form.htmx-request .tile { opacity: 0.6; }
+
+/* v2.4: offline */
+body.offline::before {
+  content: "📡";
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  font-size: 1.6rem;
+}
+.offline-page { min-height: 100vh; display: grid; place-items: center; text-align: center; }
+.offline-box .icon { font-size: 5rem; }
+.offline-box p { font-size: 1.4rem; }
+.offline-box .tile { width: 180px; margin: 0 auto; }

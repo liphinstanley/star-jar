@@ -66,3 +66,13 @@ function checkTotal() {
 
 document.addEventListener("DOMContentLoaded", checkTotal);
 document.addEventListener("htmx:afterSettle", checkTotal);
+
+// Show a small 📡 while the server can't be reached; polling clears it again.
+document.addEventListener("htmx:sendError", () => document.body.classList.add("offline"));
+document.addEventListener("htmx:afterRequest", (e) => {
+  if (e.detail.successful) document.body.classList.remove("offline");
+});
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js");
+}
