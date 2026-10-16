@@ -10,17 +10,21 @@
 <p>My jar: ⭐ {{.Total}}</p>
 <ul>
   {{range .Tasks}}
-    <li>
-      {{.Icon}} {{.Title}} — {{.Stars}} ⭐
-      {{if .Done}}✅{{else}}
-        <form method="post" action="/tasks/{{.ID}}/done" style="display:inline">
-          <button>I did it!</button>
-        </form>
-      {{end}}
-    </li>
+      <li>
+        {{.Icon}} {{.Title}} — {{.Stars}} ⭐
+        {{if eq .Status "approved"}}✅
+        {{else if eq .Status "pending"}}⏳ waiting for papa
+        {{else}}
+          <form method="post" action="/tasks/{{.ID}}/done" style="display:inline">
+            <button>I did it!</button>
+          </form>
+          {{if eq .Status "rejected"}}🔁 try again{{end}}
+        {{end}}
+      </li>
   {{else}}
     <li>No tasks today 🎉</li>
   {{end}}
 </ul>
+<p><a href="/parent">parent</a></p>
 </body>
 </html>
