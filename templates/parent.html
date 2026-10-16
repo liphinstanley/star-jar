@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>star-jar · parent</title>
+</head>
+<body>
+  <h1>Waiting for approval</h1>
+  <p>Jar: ⭐ {{.Total}}</p>
+  <ul>
+    {{range .Requests}}
+      <li>
+        {{.Day}} · {{.Icon}} {{.Title}} — {{.Stars}} ⭐
+        <form method="post" action="/parent/requests/{{.ID}}/approve" style="display:inline">
+          <button>Approve</button>
+        </form>
+        <form method="post" action="/parent/requests/{{.ID}}/reject" style="display:inline">
+          <button>Not yet</button>
+        </form>
+      </li>
+    {{else}}
+      <li>Nothing to approve 👍</li>
+    {{end}}
+  </ul>
+  <p><a href="/">back to tasks</a></p>
+</body>
+</html>
