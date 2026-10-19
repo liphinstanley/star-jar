@@ -2,29 +2,73 @@ package main
 
 import (
 	"database/sql"
-	_ "embed"
+	"embed"
 	"errors"
+	"fmt"
+	"io/fs"
 
 	_ "modernc.org/sqlite"
 )
 
-//go:embed schema.sql
-var schema string
+//go:embed migrations/*.sql
+var migrationFS embed.FS
 
 func openDB(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}
-	if _, err := db.Exec(schema); err != nil {
+	if err := migrate(db); err != nil {
 		db.Close()
 		return nil, err
 	}
+
 	if err := seed(db); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return db, nil
+}
+
+// migrate applies every migrations/NNN_*.sql file the database hasn't seen yet.
+// SQLite's user_version remembers how many have been applied.
+func migrate(db *sql.DB) error {
+	files, err := fs.Glob(migrationFS, "migrations/*.sql")
+	if err != nil {
+		return err
+	}
+	var version int
+	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		return err
+	}
+	for i := version; i < len(files); i++ {
+		body, err := migrationFS.ReadFile(files[i])
+		if err != nil {
+			return err
+		}
+		if err := applyMigration(db, i+1, string(body)); err != nil {
+			return fmt.Errorf("%s: %w", files[i], err)
+		}
+	}
+	return nil
+}
+
+// applyMigration runs one migration and bumps user_version, all or nothing
+func applyMigration(db *sql.DB, version int, body string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(body); err != nil {
+		return err
+	}
+	// PRAGMA doesn't accept ? placeholders; version is our own int, not user input
+	if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 var errNotEnoughStars = errors.New("not enough stars yet")
@@ -63,6 +107,7 @@ func todayTasks(db *sql.DB, day string) ([]Task, error) {
 		SELECT t.id, t.title, t.icon, t.stars, COALESCE(l.status, '')
 		FROM tasks t
 		LEFT JOIN task_log l ON l.task_id = t.id AND l.day = ?
+		WHERE t.active = 1
 		ORDER BY t.id`, day)
 	if err != nil {
 		return nil, err
@@ -171,8 +216,18 @@ func rejectRequest(db *sql.DB, logID int) error {
 	return nil
 }
 
+// listRewards is what the kid sees: visible rewards, cheapest first
 func listRewards(db *sql.DB) ([]Reward, error) {
-	rows, err := db.Query("SELECT id, title, icon, cost, size FROM rewards ORDER BY cost, id")
+	return queryRewards(db, "SELECT id, title, icon, cost, size, active FROM rewards WHERE active = 1 ORDER BY cost, id")
+}
+
+// allRewards is what the parent manages, hidden ones last
+func allRewards(db *sql.DB) ([]Reward, error) {
+	return queryRewards(db, "SELECT id, title, icon, cost, size, active FROM rewards ORDER BY active DESC, cost, id")
+}
+
+func queryRewards(db *sql.DB, query string) ([]Reward, error) {
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +236,7 @@ func listRewards(db *sql.DB) ([]Reward, error) {
 	var rewards []Reward
 	for rows.Next() {
 		var rw Reward
-		if err := rows.Scan(&rw.ID, &rw.Title, &rw.Icon, &rw.Cost, &rw.Size); err != nil {
+		if err := rows.Scan(&rw.ID, &rw.Title, &rw.Icon, &rw.Cost, &rw.Size, &rw.Active); err != nil {
 			return nil, err
 		}
 		rewards = append(rewards, rw)
@@ -192,7 +247,7 @@ func listRewards(db *sql.DB) ([]Reward, error) {
 // openRedemptions lists rewards bought but not given yet
 func openRedemptions(db *sql.DB) ([]Redemption, error) {
 	rows, err := db.Query(`
-		SELECT d.id, r.title, r.icon, r.cost, d.status
+		SELECT d.id, r.title, r.icon, d.cost, d.status
 		FROM redemptions d
 		JOIN rewards r ON r.id = d.reward_id
 		WHERE d.status IN ('pending', 'approved')
@@ -224,7 +279,7 @@ func spendReward(db *sql.DB, rewardID int) error {
 
 	var title, size string
 	var cost int
-	err = tx.QueryRow("SELECT title, cost, size FROM rewards WHERE id = ?", rewardID).Scan(&title, &cost, &size)
+	err = tx.QueryRow("SELECT title, cost, size FROM rewards WHERE id = ? AND active = 1", rewardID).Scan(&title, &cost, &size)
 	if err != nil {
 		return err
 	}
@@ -244,7 +299,7 @@ func spendReward(db *sql.DB, rewardID int) error {
 	if _, err := tx.Exec("INSERT INTO ledger (delta, reason) VALUES (?, ?)", -cost, "reward: "+title); err != nil {
 		return err
 	}
-	if _, err := tx.Exec("INSERT INTO redemptions (reward_id, status) VALUES (?, ?)", rewardID, status); err != nil {
+	if _, err := tx.Exec("INSERT INTO redemptions (reward_id, status, cost) VALUES (?, ?, ?)", rewardID, status, cost); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -282,7 +337,7 @@ func rejectRedemption(db *sql.DB, id int) error {
 	var title string
 	var cost int
 	err = tx.QueryRow(`
-		SELECT r.title, r.cost
+		SELECT r.title, d.cost
 		FROM redemptions d
 		JOIN rewards r ON r.id = d.reward_id
 		WHERE d.id = ? AND d.status = 'pending'`, id).Scan(&title, &cost)
@@ -297,4 +352,61 @@ func rejectRedemption(db *sql.DB, id int) error {
 		return err
 	}
 	return tx.Commit()
+}
+func allTasks(db *sql.DB) ([]Task, error) {
+	rows, err := db.Query("SELECT id, title, icon, stars, active FROM tasks ORDER BY active DESC, id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []Task
+	for rows.Next() {
+		var t Task
+		if err := rows.Scan(&t.ID, &t.Title, &t.Icon, &t.Stars, &t.Active); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
+}
+
+func createTask(db *sql.DB, in taskInput) error {
+	_, err := db.Exec("INSERT INTO tasks (title, icon, stars) VALUES (?, ?, ?)", in.Title, in.Icon, in.Stars)
+	return err
+}
+
+func updateTask(db *sql.DB, id int, in taskInput) error {
+	res, err := db.Exec("UPDATE tasks SET title = ?, icon = ?, stars = ? WHERE id = ?", in.Title, in.Icon, in.Stars, id)
+	return mustAffect(res, err)
+}
+
+func createReward(db *sql.DB, in rewardInput) error {
+	_, err := db.Exec("INSERT INTO rewards (title, icon, cost, size) VALUES (?, ?, ?, ?)", in.Title, in.Icon, in.Cost, in.Size)
+	return err
+}
+
+func updateReward(db *sql.DB, id int, in rewardInput) error {
+	res, err := db.Exec("UPDATE rewards SET title = ?, icon = ?, cost = ?, size = ? WHERE id = ?", in.Title, in.Icon, in.Cost, in.Size, id)
+	return mustAffect(res, err)
+}
+
+// setActive hides or shows a task or reward. table is always a constant from our own code.
+func setActive(db *sql.DB, table string, id int, active bool) error {
+	if table != "tasks" && table != "rewards" {
+		return fmt.Errorf("setActive: unknown table %q", table)
+	}
+	res, err := db.Exec("UPDATE "+table+" SET active = ? WHERE id = ?", active, id)
+	return mustAffect(res, err)
+}
+
+// mustAffect turns "no row matched" into sql.ErrNoRows, so handlers answer 404
+func mustAffect(res sql.Result, err error) error {
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

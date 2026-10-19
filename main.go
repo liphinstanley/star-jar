@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -18,14 +19,16 @@ type Task struct {
 	Icon   string
 	Stars  int
 	Status string // "", "pending", "approved" or "rejected"
+	Active bool
 }
 
 type Reward struct {
-	ID    int
-	Title string
-	Icon  string
-	Cost  int
-	Size  string // "small" or "big"
+	ID     int
+	Title  string
+	Icon   string
+	Cost   int
+	Size   string // "small" or "big"
+	Active bool
 }
 
 type Redemption struct {
@@ -42,6 +45,11 @@ type Request struct {
 	Title string
 	Icon  string
 	Stars int
+}
+type managePage struct {
+	Tasks   []Task
+	Rewards []Reward
+	Error   string
 }
 
 //go:embed templates
@@ -213,12 +221,97 @@ func main() {
 		http.Redirect(w, r, "/parent", http.StatusSeeOther)
 	})
 
+	mux.HandleFunc("GET /parent/manage", func(w http.ResponseWriter, r *http.Request) {
+		page := managePage{Error: r.URL.Query().Get("error")}
+		var err error
+		if page.Tasks, err = allTasks(db); err != nil {
+			serverError(w, err)
+			return
+		}
+		if page.Rewards, err = allRewards(db); err != nil {
+			serverError(w, err)
+			return
+		}
+		render(w, "manage.html", page)
+	})
+
+	mux.HandleFunc("POST /parent/tasks", func(w http.ResponseWriter, r *http.Request) {
+		in, err := readTask(r)
+		if err == nil {
+			err = createTask(db, in)
+		}
+		backToManage(w, r, err)
+	})
+
+	mux.HandleFunc("POST /parent/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := pathID(r)
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		in, err := readTask(r)
+		if err == nil {
+			err = updateTask(db, id, in)
+		}
+		backToManage(w, r, err)
+	})
+
+	mux.HandleFunc("POST /parent/rewards", func(w http.ResponseWriter, r *http.Request) {
+		in, err := readReward(r)
+		if err == nil {
+			err = createReward(db, in)
+		}
+		backToManage(w, r, err)
+	})
+
+	mux.HandleFunc("POST /parent/rewards/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := pathID(r)
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		in, err := readReward(r)
+		if err == nil {
+			err = updateReward(db, id, in)
+		}
+		backToManage(w, r, err)
+	})
+
+	mux.HandleFunc("POST /parent/tasks/{id}/active", setActiveHandler(db, "tasks"))
+	mux.HandleFunc("POST /parent/rewards/{id}/active", setActiveHandler(db, "rewards"))
+
 	log.Println("listening on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }
 
 func pathID(r *http.Request) (int, error) {
 	return strconv.Atoi(r.PathValue("id"))
+}
+
+// setActiveHandler builds the hide/show handler for tasks or rewards
+func setActiveHandler(db *sql.DB, table string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := pathID(r)
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		active := r.FormValue("active") == "1"
+		backToManage(w, r, setActive(db, table, id, active))
+	}
+}
+
+// backToManage redirects to the manage page, carrying a typing mistake along as ?error=
+func backToManage(w http.ResponseWriter, r *http.Request, err error) {
+	var bad inputError
+	if errors.As(err, &bad) {
+		http.Redirect(w, r, "/parent/manage?error="+url.QueryEscape(bad.Error()), http.StatusSeeOther)
+		return
+	}
+	if !handled(w, r, err) {
+		return
+	}
+	http.Redirect(w, r, "/parent/manage", http.StatusSeeOther)
 }
 
 // handled writes an error response if err is not nil and reports whether it was nil

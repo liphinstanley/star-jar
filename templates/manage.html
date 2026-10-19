@@ -1,0 +1,64 @@
+{{template "head" "star-jar · manage"}}
+<body class="parent" hx-boost="true">
+  <h1>Manage</h1>
+  {{with .Error}}<p class="error">⚠️ {{.}}</p>{{end}}
+
+  <h2>Tasks</h2>
+  {{range .Tasks}}
+    <div class="row{{if not .Active}} hidden-row{{end}}">
+      <form method="post" action="/parent/tasks/{{.ID}}" class="edit">
+        <input name="icon" value="{{.Icon}}" maxlength="16" size="2" required aria-label="icon">
+        <input name="title" value="{{.Title}}" maxlength="40" required aria-label="title">
+        <input name="stars" type="number" value="{{.Stars}}" min="1" max="20" required aria-label="stars"> ⭐
+        <button>Save</button>
+      </form>
+      <form method="post" action="/parent/tasks/{{.ID}}/active">
+        <input type="hidden" name="active" value="{{if .Active}}0{{else}}1{{end}}">
+        <button>{{if .Active}}Hide{{else}}Show{{end}}</button>
+      </form>
+    </div>
+  {{end}}
+  <div class="row new">
+    <form method="post" action="/parent/tasks" class="edit">
+      <input name="icon" placeholder="🧦" maxlength="16" size="2" required aria-label="icon">
+      <input name="title" placeholder="New task" maxlength="40" required aria-label="title">
+      <input name="stars" type="number" value="1" min="1" max="20" required aria-label="stars"> ⭐
+      <button>Add task</button>
+    </form>
+  </div>
+
+  <h2>Rewards</h2>
+  {{range .Rewards}}
+    <div class="row{{if not .Active}} hidden-row{{end}}">
+      <form method="post" action="/parent/rewards/{{.ID}}" class="edit">
+        <input name="icon" value="{{.Icon}}" maxlength="16" size="2" required aria-label="icon">
+        <input name="title" value="{{.Title}}" maxlength="40" required aria-label="title">
+        <input name="cost" type="number" value="{{.Cost}}" min="1" max="1000" required aria-label="cost"> ⭐
+        <select name="size" aria-label="size">
+          <option value="small"{{if eq .Size "small"}} selected{{end}}>small</option>
+          <option value="big"{{if eq .Size "big"}} selected{{end}}>big</option>
+        </select>
+        <button>Save</button>
+      </form>
+      <form method="post" action="/parent/rewards/{{.ID}}/active">
+        <input type="hidden" name="active" value="{{if .Active}}0{{else}}1{{end}}">
+        <button>{{if .Active}}Hide{{else}}Show{{end}}</button>
+      </form>
+    </div>
+  {{end}}
+  <div class="row new">
+    <form method="post" action="/parent/rewards" class="edit">
+      <input name="icon" placeholder="🍦" maxlength="16" size="2" required aria-label="icon">
+      <input name="title" placeholder="New reward" maxlength="40" required aria-label="title">
+      <input name="cost" type="number" value="5" min="1" max="1000" required aria-label="cost"> ⭐
+      <select name="size" aria-label="size">
+        <option value="small">small</option>
+        <option value="big">big</option>
+      </select>
+      <button>Add reward</button>
+    </form>
+  </div>
+
+  <p><a href="/parent">back to approvals</a></p>
+</body>
+</html>

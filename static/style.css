@@ -144,3 +144,14 @@ body.offline::before {
 .offline-box .icon { font-size: 5rem; }
 .offline-box p { font-size: 1.4rem; }
 .offline-box .tile { width: 180px; margin: 0 auto; }
+
+/* v2.5: manage page */
+body.parent .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+body.parent .row form { margin: 0; }
+body.parent .edit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+body.parent input, body.parent select { font: inherit; padding: 4px 6px; }
+body.parent input[name="icon"] { width: 3em; text-align: center; }
+body.parent input[type="number"] { width: 4.5em; }
+body.parent .row.new { padding-top: 8px; border-top: 1px dashed #ccc; }
+body.parent .hidden-row { opacity: 0.45; }
+.error { background: #ffe0e0; padding: 8px 12px; border-radius: 8px; }
