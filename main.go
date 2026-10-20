@@ -1,16 +1,22 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"errors"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
+	_ "time/tzdata" // time zones built in, the container image has none
 )
 
 type Task struct {
@@ -93,8 +99,19 @@ func today() string {
 	return time.Now().Format("2006-01-02")
 }
 
+// getenv returns the environment variable, or def when it isn't set
+func getenv(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 func main() {
-	db, err := openDB("star-jar.db")
+	port := getenv("PORT", "8080")
+	dbPath := getenv("DB_PATH", "star-jar.db")
+
+	db, err := openDB(dbPath)
 	if err != nil {
 		log.Fatal("open db: ", err)
 	}
@@ -107,6 +124,14 @@ func main() {
 	mux.HandleFunc("GET /sw.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFileFS(w, r, staticFS, "static/sw.js")
+	})
+
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		if err := db.PingContext(r.Context()); err != nil {
+			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Fprintln(w, "ok")
 	})
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -280,8 +305,33 @@ func main() {
 	mux.HandleFunc("POST /parent/tasks/{id}/active", setActiveHandler(db, "tasks"))
 	mux.HandleFunc("POST /parent/rewards/{id}/active", setActiveHandler(db, "rewards"))
 
-	log.Println("listening on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	// stop on Ctrl+C locally, or SIGTERM from Docker / Cloud Run
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		log.Printf("listening on :%s, db %s, today is %s (%s)", port, dbPath, today(), time.Now().Format("MST"))
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("shutting down")
+
+	// let requests in flight finish, but don't wait forever
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Println("shutdown:", err)
+	}
+	// deferred db.Close() runs now, after the last request
 }
 
 func pathID(r *http.Request) (int, error) {
