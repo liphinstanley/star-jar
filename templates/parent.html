@@ -1,6 +1,8 @@
 {{template "head" "star-jar · parent"}}
 <body class="parent" hx-boost="true">
-<main id="app" hx-get="/parent" hx-trigger="every 5s" hx-select="#app" hx-swap="outerHTML">
+<!-- refresh #app every 5s; kept off <main> so its forms and links don't inherit these -->
+<div hx-get="/parent" hx-trigger="every 5s" hx-select="#app" hx-target="#app" hx-swap="outerHTML"></div>
+<main id="app">
   <h1>Waiting for approval</h1>
   <p>Jar: ⭐ {{.Total}}</p>
   <ul>

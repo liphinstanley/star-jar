@@ -1,7 +1,8 @@
 {{template "head" "star-jar"}}
 <body class="kid" hx-boost="true">
-<main id="app" data-total="{{.Total}}"
-      hx-get="/" hx-trigger="every 5s" hx-select="#app" hx-swap="outerHTML">
+<!-- refresh #app every 5s; kept off <main> so its forms and links don't inherit these -->
+<div hx-get="/" hx-trigger="every 5s" hx-select="#app" hx-target="#app" hx-swap="outerHTML"></div>
+<main id="app" data-total="{{.Total}}">
   <header class="jar-wrap">
     <div class="jar" role="img" aria-label="{{.Total}} stars in the jar">
       <div id="jar-fill" class="jar-fill" style="height: {{.JarPercent}}%"></div>
