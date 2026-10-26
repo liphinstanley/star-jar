@@ -1,0 +1,13 @@
+{{template "head" "star-jar · sign in"}}
+<body class="parent auth">
+  <main class="auth-box">
+    <h1>⭐ star-jar</h1>
+    <p>Sign in this device with the family password.</p>
+    {{with .Error}}<p class="error">⚠️ {{.}}</p>{{end}}
+    <form method="post" action="/login">
+      <input type="password" name="password" autocomplete="current-password" required autofocus aria-label="family password">
+      <button>Sign in</button>
+    </form>
+  </main>
+</body>
+</html>

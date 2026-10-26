@@ -1,0 +1,13 @@
+{{template "head" "star-jar · parents"}}
+<body class="parent auth">
+  <main class="auth-box">
+    <h1>🔒 Parents only</h1>
+    {{with .Error}}<p class="error">⚠️ {{.}}</p>{{end}}
+    <form method="post" action="/parent/pin">
+      <input class="pin" type="password" name="pin" inputmode="numeric" autocomplete="off" required autofocus aria-label="PIN">
+      <button>Unlock</button>
+    </form>
+    <p><a href="/">back to tasks</a></p>
+  </main>
+</body>
+</html>

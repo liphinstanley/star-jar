@@ -110,6 +110,10 @@ func getenv(key, def string) string {
 func main() {
 	port := getenv("PORT", "8080")
 	dbPath := getenv("DB_PATH", "star-jar.db")
+	a, err := newAuth(os.Getenv("FAMILY_PASSWORD"), os.Getenv("PARENT_PIN"), os.Getenv("SESSION_KEY"))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	db, err := openDB(dbPath)
 	if err != nil {
@@ -117,7 +121,22 @@ func main() {
 	}
 	defer db.Close()
 
+	// three routers: mux is open to everyone, app needs the family login,
+	// parent needs the PIN as well
 	mux := http.NewServeMux()
+	app := http.NewServeMux()
+	parent := http.NewServeMux()
+	mux.Handle("/", a.requireFamily(app))
+	app.Handle("/parent", a.requireParent(parent))
+	app.Handle("/parent/", a.requireParent(parent))
+
+	mux.HandleFunc("GET /login", a.loginPage)
+	mux.HandleFunc("POST /login", a.login)
+	mux.HandleFunc("POST /logout", a.logout)
+	app.HandleFunc("GET /parent/pin", a.pinPage)
+	app.HandleFunc("POST /parent/pin", a.unlock)
+	parent.HandleFunc("POST /parent/lock", a.lock)
+
 	mux.Handle("GET /static/", http.FileServerFS(staticFS))
 
 	// the service worker must be served from / to control the whole site
@@ -134,7 +153,7 @@ func main() {
 		fmt.Fprintln(w, "ok")
 	})
 
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+	app.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		var page kidPage
 		var err error
 		if page.Tasks, err = todayTasks(db, today()); err != nil {
@@ -157,7 +176,7 @@ func main() {
 
 	})
 
-	mux.HandleFunc("POST /tasks/{id}/done", func(w http.ResponseWriter, r *http.Request) {
+	app.HandleFunc("POST /tasks/{id}/done", func(w http.ResponseWriter, r *http.Request) {
 		id, err := pathID(r)
 		if err != nil {
 			http.Error(w, "bad id", http.StatusBadRequest)
@@ -169,7 +188,7 @@ func main() {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 
-	mux.HandleFunc("GET /parent", func(w http.ResponseWriter, r *http.Request) {
+	parent.HandleFunc("GET /parent", func(w http.ResponseWriter, r *http.Request) {
 		var page parentPage
 		var err error
 		if page.Requests, err = pendingRequests(db); err != nil {
@@ -188,7 +207,7 @@ func main() {
 
 	})
 
-	mux.HandleFunc("POST /parent/requests/{id}/approve", func(w http.ResponseWriter, r *http.Request) {
+	parent.HandleFunc("POST /parent/requests/{id}/approve", func(w http.ResponseWriter, r *http.Request) {
 		id, err := pathID(r)
 		if err != nil {
 			http.Error(w, "bad id", http.StatusBadRequest)
@@ -200,7 +219,7 @@ func main() {
 		http.Redirect(w, r, "/parent", http.StatusSeeOther)
 	})
 
-	mux.HandleFunc("POST /parent/requests/{id}/reject", func(w http.ResponseWriter, r *http.Request) {
+	parent.HandleFunc("POST /parent/requests/{id}/reject", func(w http.ResponseWriter, r *http.Request) {
 		id, err := pathID(r)
 		if err != nil {
 			http.Error(w, "bad id", http.StatusBadRequest)
@@ -212,7 +231,7 @@ func main() {
 		http.Redirect(w, r, "/parent", http.StatusSeeOther)
 	})
 
-	mux.HandleFunc("POST /rewards/{id}/spend", func(w http.ResponseWriter, r *http.Request) {
+	app.HandleFunc("POST /rewards/{id}/spend", func(w http.ResponseWriter, r *http.Request) {
 		id, err := pathID(r)
 		if err != nil {
 			http.Error(w, "bad id", http.StatusBadRequest)
@@ -229,7 +248,7 @@ func main() {
 		"reject":  rejectRedemption,
 		"given":   givenRedemption,
 	}
-	mux.HandleFunc("POST /parent/redemptions/{id}/{action}", func(w http.ResponseWriter, r *http.Request) {
+	parent.HandleFunc("POST /parent/redemptions/{id}/{action}", func(w http.ResponseWriter, r *http.Request) {
 		action, ok := redemptionActions[r.PathValue("action")]
 		if !ok {
 			http.NotFound(w, r)
@@ -246,7 +265,7 @@ func main() {
 		http.Redirect(w, r, "/parent", http.StatusSeeOther)
 	})
 
-	mux.HandleFunc("GET /parent/manage", func(w http.ResponseWriter, r *http.Request) {
+	parent.HandleFunc("GET /parent/manage", func(w http.ResponseWriter, r *http.Request) {
 		page := managePage{Error: r.URL.Query().Get("error")}
 		var err error
 		if page.Tasks, err = allTasks(db); err != nil {
@@ -260,7 +279,7 @@ func main() {
 		render(w, "manage.html", page)
 	})
 
-	mux.HandleFunc("POST /parent/tasks", func(w http.ResponseWriter, r *http.Request) {
+	parent.HandleFunc("POST /parent/tasks", func(w http.ResponseWriter, r *http.Request) {
 		in, err := readTask(r)
 		if err == nil {
 			err = createTask(db, in)
@@ -268,7 +287,7 @@ func main() {
 		backToManage(w, r, err)
 	})
 
-	mux.HandleFunc("POST /parent/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+	parent.HandleFunc("POST /parent/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := pathID(r)
 		if err != nil {
 			http.Error(w, "bad id", http.StatusBadRequest)
@@ -281,7 +300,7 @@ func main() {
 		backToManage(w, r, err)
 	})
 
-	mux.HandleFunc("POST /parent/rewards", func(w http.ResponseWriter, r *http.Request) {
+	parent.HandleFunc("POST /parent/rewards", func(w http.ResponseWriter, r *http.Request) {
 		in, err := readReward(r)
 		if err == nil {
 			err = createReward(db, in)
@@ -289,7 +308,7 @@ func main() {
 		backToManage(w, r, err)
 	})
 
-	mux.HandleFunc("POST /parent/rewards/{id}", func(w http.ResponseWriter, r *http.Request) {
+	parent.HandleFunc("POST /parent/rewards/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := pathID(r)
 		if err != nil {
 			http.Error(w, "bad id", http.StatusBadRequest)
@@ -302,8 +321,8 @@ func main() {
 		backToManage(w, r, err)
 	})
 
-	mux.HandleFunc("POST /parent/tasks/{id}/active", setActiveHandler(db, "tasks"))
-	mux.HandleFunc("POST /parent/rewards/{id}/active", setActiveHandler(db, "rewards"))
+	parent.HandleFunc("POST /parent/tasks/{id}/active", setActiveHandler(db, "tasks"))
+	parent.HandleFunc("POST /parent/rewards/{id}/active", setActiveHandler(db, "rewards"))
 
 	srv := &http.Server{
 		Addr:              ":" + port,
