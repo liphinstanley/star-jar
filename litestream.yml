@@ -1,0 +1,5 @@
+# Litestream copies every database change to REPLICA_URL (gs://bucket/path on Cloud Run)
+dbs:
+  - path: ${DB_PATH}
+    replica:
+      url: ${REPLICA_URL}

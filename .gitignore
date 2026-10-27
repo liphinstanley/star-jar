@@ -1,2 +1,8 @@
 /bin/
 *.db
+*.db-*
+
+# terraform
+infra/.terraform/
+*.tfstate
+*.tfstate.*
