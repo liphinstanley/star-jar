@@ -30,7 +30,7 @@ const sounds = {
 // Browsers only allow sound after the user has tapped something.
 document.addEventListener("click", (e) => {
   ctx().resume();
-  if (e.target.closest("button.tile")) sounds.tap();
+  if (e.target.closest("button.tile, a.tile")) sounds.tap();
 });
 
 // Stars falling into the jar.
@@ -76,3 +76,11 @@ document.addEventListener("htmx:afterRequest", (e) => {
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");
 }
+
+// Boosted links only swap what's inside <body>, so take the new page's body class too
+// (kid, parent, confirm and auth pages each style themselves through it).
+document.addEventListener("htmx:beforeSwap", (e) => {
+  if (!e.detail.boosted) return;
+  const m = e.detail.xhr.responseText.match(/<body[^>]*\sclass="([^"]*)"/);
+  if (m) document.body.className = m[1];
+});

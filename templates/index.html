@@ -41,13 +41,11 @@
   <section class="tiles">
     {{range .Rewards}}
       {{if ge $.Total .Cost}}
-        <form method="post" action="/rewards/{{.ID}}/spend">
-          <button class="tile reward {{.Size}}">
-            <span class="icon">{{.Icon}}</span>
-            <span class="stars">⭐ {{.Cost}}</span>
-            <span class="label">{{.Title}}</span>
-          </button>
-        </form>
+        <a class="tile reward {{.Size}}" href="/rewards/{{.ID}}">
+          <span class="icon">{{.Icon}}</span>
+          <span class="stars">⭐ {{.Cost}}</span>
+          <span class="label">{{.Title}}</span>
+        </a>
       {{else}}
         <div class="tile reward locked {{.Size}}">
           <span class="icon">{{.Icon}}</span>

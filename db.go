@@ -327,7 +327,8 @@ func setRedemptionStatus(db *sql.DB, id int, from, to string) error {
 	return nil
 }
 
-// rejectRedemption says no to a big reward and puts the stars back in the jar
+// rejectRedemption says no to a big reward, or undoes any reward not given yet,
+// and puts the stars back in the jar
 func rejectRedemption(db *sql.DB, id int) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -341,7 +342,7 @@ func rejectRedemption(db *sql.DB, id int) error {
 		SELECT r.title, d.cost
 		FROM redemptions d
 		JOIN rewards r ON r.id = d.reward_id
-		WHERE d.id = ? AND d.status = 'pending'`, id).Scan(&title, &cost)
+		WHERE d.id = ? AND d.status IN ('pending', 'approved')`, id).Scan(&title, &cost)
 	if err != nil {
 		return err
 	}
@@ -410,4 +411,12 @@ func mustAffect(res sql.Result, err error) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// getReward returns one visible reward
+func getReward(db *sql.DB, id int) (Reward, error) {
+	var rw Reward
+	err := db.QueryRow("SELECT id, title, icon, cost, size, active FROM rewards WHERE id = ? AND active = 1", id).
+		Scan(&rw.ID, &rw.Title, &rw.Icon, &rw.Cost, &rw.Size, &rw.Active)
+	return rw, err
 }

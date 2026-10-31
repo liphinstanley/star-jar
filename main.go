@@ -58,6 +58,12 @@ type managePage struct {
 	Error   string
 }
 
+type confirmPage struct {
+	Reward Reward
+	Total  int // stars now
+	After  int // stars left after buying
+}
+
 //go:embed templates
 var templateFS embed.FS
 
@@ -229,6 +235,29 @@ func main() {
 			return
 		}
 		http.Redirect(w, r, "/parent", http.StatusSeeOther)
+	})
+
+	// "are you sure?" before stars leave the jar
+	app.HandleFunc("GET /rewards/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := pathID(r)
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		rw, err := getReward(db, id)
+		if !handled(w, r, err) {
+			return
+		}
+		total, err := starBalance(db)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		if total < rw.Cost {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		render(w, "confirm.html", confirmPage{Reward: rw, Total: total, After: total - rw.Cost})
 	})
 
 	app.HandleFunc("POST /rewards/{id}/spend", func(w http.ResponseWriter, r *http.Request) {

@@ -36,6 +36,9 @@
           <form method="post" action="/parent/redemptions/{{.ID}}/given" style="display:inline">
             <button>Given ✔</button>
           </form>
+          <form method="post" action="/parent/redemptions/{{.ID}}/reject" style="display:inline">
+            <button>Undo (refund)</button>
+          </form>
         {{end}}
       </li>
     {{else}}

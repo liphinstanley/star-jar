@@ -1,0 +1,21 @@
+{{template "head" "star-jar"}}
+<body class="kid confirm" hx-boost="true">
+  <main class="confirm-box">
+    <div class="big-icon">{{.Reward.Icon}}</div>
+    <p class="label">{{.Reward.Title}}</p>
+    <p class="trade">⭐ {{.Total}} → ⭐ {{.After}}</p>
+    <div class="choices">
+      <form method="post" action="/rewards/{{.Reward.ID}}/spend">
+        <button class="tile yes">
+          <span class="icon">{{if eq .Reward.Size "big"}}🙋{{else}}✅{{end}}</span>
+          <span class="label">{{if eq .Reward.Size "big"}}Ask{{else}}Yes!{{end}}</span>
+        </button>
+      </form>
+      <a class="tile no" href="/">
+        <span class="icon">❌</span>
+        <span class="label">Not now</span>
+      </a>
+    </div>
+  </main>
+</body>
+</html>
