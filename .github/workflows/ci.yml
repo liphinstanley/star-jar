@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  REGION: europe-west1
+  IMAGE: europe-west1-docker.pkg.dev/star-jar-liphin/star-jar/star-jar
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "not gofmt'ed:"; echo "$unformatted"; exit 1; fi
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go build ./...
+
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # lets the job ask GitHub for its signed identity token
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+
+      # no keys: trade GitHub's token for a short-lived Google one (see infra/ci.tf)
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/716126026577/locations/global/workloadIdentityPools/github/providers/star-jar
+          service_account: github-deployer@star-jar-liphin.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v3
+      - run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Image tag = short commit
+        id: tag
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to every family
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          services=$(gcloud run services list --region "$REGION" \
+            --filter="metadata.labels.app=star-jar" --format="value(metadata.name)")
+          for s in $services; do
+            echo "deploying $s"
+            gcloud run services update "$s" --region "$REGION" --image "$IMAGE:$TAG" --quiet
+          done

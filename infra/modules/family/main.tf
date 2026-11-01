@@ -77,6 +77,12 @@ resource "google_cloud_run_v2_service" "app" {
   ingress             = "INGRESS_TRAFFIC_ALL"
   deletion_protection = false
 
+  # CI finds every family's service by this label
+  labels = {
+    app    = "star-jar"
+    family = var.name
+  }
+
   template {
     service_account                  = google_service_account.app.email
     execution_environment            = "EXECUTION_ENVIRONMENT_GEN2"
@@ -136,6 +142,15 @@ resource "google_cloud_run_v2_service" "app" {
         failure_threshold = 30
       }
     }
+  }
+
+  # CI deploys new images; Terraform owns everything else
+  lifecycle {
+    ignore_changes = [
+      client,
+      client_version,
+      template[0].containers[0].image,
+    ]
   }
 
   depends_on = [

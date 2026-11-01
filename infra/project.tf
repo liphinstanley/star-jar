@@ -3,6 +3,8 @@ locals {
     "artifactregistry.googleapis.com",
     "billingbudgets.googleapis.com",
     "iam.googleapis.com",
+    "iamcredentials.googleapis.com", # GitHub Actions: short-lived tokens
+    "sts.googleapis.com",            # GitHub Actions: token exchange
     "run.googleapis.com",
     "secretmanager.googleapis.com",
     "storage.googleapis.com",
