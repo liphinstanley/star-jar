@@ -152,6 +152,7 @@ func (a *auth) loginPage(w http.ResponseWriter, r *http.Request) {
 
 func (a *auth) login(w http.ResponseWriter, r *http.Request) {
 	if err := a.check(&a.loginLimit, r.FormValue("password"), a.familyPassword); err != nil {
+		log.Printf("login failed: %v (from %s)", err, r.Header.Get("X-Forwarded-For"))
 		http.Redirect(w, r, "/login?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
@@ -171,6 +172,7 @@ func (a *auth) pinPage(w http.ResponseWriter, r *http.Request) {
 
 func (a *auth) unlock(w http.ResponseWriter, r *http.Request) {
 	if err := a.check(&a.pinLimit, r.FormValue("pin"), a.parentPIN); err != nil {
+		log.Printf("PIN failed: %v (from %s)", err, r.Header.Get("X-Forwarded-For"))
 		http.Redirect(w, r, "/parent/pin?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}

@@ -1,6 +1,6 @@
 // Service worker: makes star-jar installable and shows a friendly page when offline.
 // Bump VERSION when files in PRECACHE change, so phones drop the old copies.
-const VERSION = "v4";
+const VERSION = "v5";
 const CACHE = `star-jar-${VERSION}`;
 const PRECACHE = [
   "/static/offline.html",

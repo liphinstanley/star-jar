@@ -355,7 +355,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           mux,
+		Handler:           securityHeaders(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
