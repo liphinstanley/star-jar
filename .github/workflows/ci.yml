@@ -3,6 +3,10 @@ name: ci
 on:
   push:
     branches: [main]
+    paths-ignore: # docs-only pushes don't need a new image
+      - "**.md"
+      - "docs/**"
+      - LICENSE
   pull_request:
 
 permissions:
