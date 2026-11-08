@@ -33,15 +33,15 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("button.tile, a.tile")) sounds.tap();
 });
 
-// Stars falling into the jar.
+// Stars falling into the jar, inside the glass so they land on the pile.
 function celebrate(n) {
-  const wrap = document.querySelector(".jar-wrap");
+  const wrap = document.querySelector(".jar-inside");
   if (!wrap) return;
   for (let i = 0; i < Math.min(n, 10); i++) {
     const s = document.createElement("span");
     s.className = "burst";
     s.textContent = "⭐";
-    s.style.left = 35 + Math.random() * 30 + "%";
+    s.style.left = 10 + Math.random() * 60 + "%";
     s.style.animationDelay = i * 0.12 + "s";
     s.addEventListener("animationend", () => s.remove());
     wrap.appendChild(s);
@@ -49,7 +49,18 @@ function celebrate(n) {
 }
 
 // After every page update, compare the jar with what it was before.
-let lastTotal = null;
+// The last total is remembered between visits: iPads often reopen the app as a
+// fresh page, and stars approved meanwhile still deserve falling stars.
+function savedTotal() {
+  try {
+    const v = localStorage.getItem("sj-total");
+    return v === null ? null : Number(v);
+  } catch {
+    return null; // private mode or storage blocked: just celebrate live changes
+  }
+}
+
+let lastTotal = savedTotal();
 
 function checkTotal() {
   const app = document.querySelector("#app[data-total]");
@@ -62,6 +73,9 @@ function checkTotal() {
     sounds.spend();
   }
   lastTotal = total;
+  try {
+    localStorage.setItem("sj-total", total);
+  } catch {}
 }
 
 document.addEventListener("DOMContentLoaded", checkTotal);

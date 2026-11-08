@@ -29,30 +29,42 @@ h2 { font-size: 1.6rem; }
 
 /* jar */
 .jar-wrap { display: flex; justify-content: center; }
+/* a glass jar: the stars sit behind a see-through SVG, sized in the same 200x280 units */
 .jar {
   position: relative;
-  width: 180px;
-  height: 220px;
-  border: 6px solid var(--jar-edge);
-  border-top-width: 14px;
-  border-radius: 28px 28px 48px 48px;
-  background: var(--jar);
+  width: 200px;
+  height: 280px;
+}
+.jar-inside { /* the space inside the glass body */
+  position: absolute;
+  inset: 85px 25px 14px;
+  border-radius: 23px 23px 25px 25px;
   overflow: hidden;
 }
 .jar-fill {
   position: absolute;
   inset: auto 0 0 0;
-  background: linear-gradient(var(--star), #ffad1f);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='30'%3E%3Cpath d='M9 2l2.1 4.6 5 .5-3.8 3.4 1.1 4.9L9 12.9 4.6 15.4l1.1-4.9L1.9 7.1l5-.5z' fill='%23fff3b0' opacity='.8'/%3E%3Cpath d='M26 15l1.6 3.4 3.7.4-2.8 2.5.8 3.6L26 23l-3.3 1.9.8-3.6-2.8-2.5 3.7-.4z' fill='%23ffe066'/%3E%3C/svg%3E"),
+    linear-gradient(#ffd54a, #ffad1f);
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.45); /* the top of the pile catches the light */
   transition: height 0.6s ease;
+}
+.jar-glass {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 .jar-count {
   position: absolute;
-  inset: 0;
+  inset: 85px 25px 14px;
   display: grid;
   place-items: center;
   font-size: 2.6rem;
   font-weight: 800;
-  text-shadow: 0 2px 0 #fff;
+  text-shadow: 0 2px 0 #fff, 0 0 12px #fff;
 }
 
 /* tiles */
@@ -117,10 +129,9 @@ body.parent li { margin: 8px 0; }
 body.parent button { padding: 6px 12px; font: inherit; }
 
 /* v2.3: motion */
-.jar-wrap { position: relative; }
 .burst {
   position: absolute;
-  top: -20px;
+  top: -40px;
   font-size: 2.2rem;
   pointer-events: none;
   animation: fall 1s ease-in forwards;
@@ -128,7 +139,7 @@ body.parent button { padding: 6px 12px; font: inherit; }
 @keyframes fall {
   from { transform: translateY(0) scale(1.4); opacity: 1; }
   80%  { opacity: 1; }
-  to   { transform: translateY(170px) scale(0.6); opacity: 0; }
+  to   { transform: translateY(150px) scale(0.6); opacity: 0; }
 }
 form.htmx-request .tile { opacity: 0.6; }
 

@@ -5,7 +5,46 @@
 <main id="app" data-total="{{.Total}}">
   <header class="jar-wrap">
     <div class="jar" role="img" aria-label="{{.Total}} stars in the jar">
-      <div id="jar-fill" class="jar-fill" style="height: {{.JarPercent}}%"></div>
+      <div class="jar-inside">
+        <div id="jar-fill" class="jar-fill" style="height: {{.JarPercent}}%"></div>
+      </div>
+      <svg class="jar-glass" viewBox="0 0 200 280" aria-hidden="true">
+        <defs>
+          <linearGradient id="glass" x1="0" x2="1">
+            <stop offset="0" stop-color="#9fbccf" stop-opacity=".55"/>
+            <stop offset=".1" stop-color="#fff" stop-opacity=".25"/>
+            <stop offset=".5" stop-color="#fff" stop-opacity=".04"/>
+            <stop offset=".9" stop-color="#fff" stop-opacity=".2"/>
+            <stop offset="1" stop-color="#9fbccf" stop-opacity=".55"/>
+          </linearGradient>
+          <linearGradient id="lid" x1="0" x2="1">
+            <stop offset="0" stop-color="#b9cfdc"/>
+            <stop offset=".25" stop-color="#f4f9fc"/>
+            <stop offset=".6" stop-color="#dde9f0"/>
+            <stop offset="1" stop-color="#a9c2d2"/>
+          </linearGradient>
+        </defs>
+        <ellipse cx="100" cy="275" rx="74" ry="4" fill="#3b2f2f" opacity=".1"/>
+        <!-- body: outer glass, then the inner edge that shows its thickness -->
+        <path d="M46 80H154Q180 80 180 106V244Q180 272 152 272H48Q20 272 20 244V106Q20 80 46 80Z"
+              fill="url(#glass)" stroke="#7fa3ba" stroke-opacity=".75" stroke-width="2.5"/>
+        <path d="M48 85H152Q175 85 175 108V243Q175 266 151 266H49Q25 266 25 243V108Q25 85 48 85Z"
+              fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="1.5"/>
+        <path d="M30 255Q100 270 170 255" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="3"/>
+        <!-- light reflections -->
+        <rect x="33" y="100" width="9" height="140" rx="4.5" fill="#fff" opacity=".75"/>
+        <rect x="47" y="104" width="3" height="120" rx="1.5" fill="#fff" opacity=".45"/>
+        <rect x="160" y="104" width="6" height="130" rx="3" fill="#fff" opacity=".45"/>
+        <!-- collar, lid and knob -->
+        <rect x="32" y="62" width="136" height="20" rx="6" fill="url(#glass)" stroke="#7fa3ba" stroke-opacity=".75" stroke-width="2"/>
+        <rect x="38" y="67" width="124" height="3" rx="1.5" fill="#fff" opacity=".7"/>
+        <rect x="22" y="48" width="156" height="16" rx="8" fill="url(#lid)" stroke="#7fa3ba" stroke-width="2"/>
+        <path d="M34 49Q38 28 100 26Q162 28 166 49Z" fill="url(#lid)" stroke="#7fa3ba" stroke-width="2"/>
+        <rect x="92" y="17" width="16" height="11" fill="url(#lid)" stroke="#7fa3ba" stroke-width="2"/>
+        <ellipse cx="100" cy="14" rx="15" ry="11" fill="url(#lid)" stroke="#7fa3ba" stroke-width="2"/>
+        <ellipse cx="94" cy="10" rx="5" ry="3" fill="#fff" opacity=".9"/>
+        <path d="M50 44Q60 33 90 31" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".9"/>
+      </svg>
       <div class="jar-count">⭐ {{.Total}}</div>
     </div>
   </header>
